@@ -504,46 +504,61 @@ nnoremap [d <NOP>
 xnoremap <s-down> :m '>+1<CR>gv=gv
 xnoremap <s-up> :m '<-2<CR>gv=gv
 
-" Move selected lines up
-xnoremap <A-k> :m '<-2<CR>gv=gv
-
-function! Resize()
-    " 2. Count the windows
-    let wcount = winnr('$')
-    " 3. Move to the top-left window
-    wincmd t
-    " 4. Resize all but the last window to 80 columns
-    " range(1, wcount) goes from 1 to wcount-1, because the last number
-    " is exclusive
-    for i in range(1, wcount)
-        vertical resize 90
-        if i < wcount - 1
-            " Move to the next window
-            wincmd w
+function! s:get_vsplit_count()
+    " Count the number of vertical splits in the top row (2)
+    let l:count = 0
+    for i in range(1, winnr('$'))
+        if win_screenpos(i)[0] == 2
+            let l:count += 1
         endif
     endfor
+    return l:count
 endfunction
 
-function! KillCurrentWindow()
-    close
-    call Resize()
-endfunction
-
-function! VerticalSplitAndResize()
-    "0. remember current window number
+function! s:my_resize()
+    let size = 85
+    " Save current window number
     let l:current_window = winnr()
-    " 1. Perform a vertical split
-    vsplit
-    " call Resize
-    call Resize()
-    " 5. Move cursor to the far right window
-    " Go to top-left window first
-    wincmd t
-    " move to the window remembered
-    exe l:current_window . "wincmd w"
-    " Move right one window
-    wincmd l
+    " Count total number of windows
+    let l:vsplit_count = s:get_vsplit_count()
+    " Calculate total available columns
+    let l:total_cols = &columns
+    " Calculate how many windows can be 80 columns
+    let l:windows_at_80 = l:total_cols / size
+    " if the number of windows is the same as windows at 80 then reduce number
+    " by 1
+    if l:vsplit_count < l:windows_at_80
+        let l:actual_windows_at_80 = l:vsplit_count
+    else
+        let l:actual_windows_at_80 = l:windows_at_80
+    endif
+    if l:vsplit_count == l:actual_windows_at_80
+        let l:windows_to_resize = l:vsplit_count - 1
+    else
+        let l:windows_to_resize = l:actual_windows_at_80
+    endif
+    " Go to leftmost window
+    execute "1wincmd w"
+    " Set as many windows as possible to 80 columns
+    for i in range(1, l:windows_to_resize)
+        execute "vertical resize " . size
+        execute "wincmd l"
+    endfor
+    execute l:current_window . "wincmd w"
 endfunction
+command! MyResize call s:my_resize()
+
+function! s:my_close()
+    close
+    MyResize
+endfunction
+command! MyClose call s:my_close()
+
+function! s:my_vsplit()
+    vsplit
+    MyResize
+endfunction
+command! MyVsplit call s:my_vsplit()
 
 " remaps
 " nmap <leader>e :e **/
@@ -563,8 +578,8 @@ vmap <leader>r y:,$s/"//gc<left><left><left>
 nmap <leader>R yiw:,$s/\<"\>//gc<left><left><left>
 vmap <leader>R y:,$s/\<"\>//gc<left><left><left>
 " nmap <leader>v <c-w>v<c-w>w
-nmap <leader>v :call VerticalSplitAndResize()<cr>
-nmap <leader>q :call KillCurrentWindow()<cr>
+nmap <leader>v :MyVsplit<cr>
+nmap <leader>q :MyClose<cr>
 nmap <leader>i :e $MYVIMRC<cr>
 nmap <leader>l :set list! list?<cr>
 nmap <leader>xi :so $MYVIMRC<cr>
